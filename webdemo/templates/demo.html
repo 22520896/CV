@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Demo{% endblock %}
+{% block body %}
+<h1>Phân loại tình huống ngã và không ngã của người từ hình ảnh</h1>
+<form method="post" enctype="multipart/form-data">
+  <div class="fields">
+    <label>Tập huấn luyện
+      <select name="train_source">
+        {% for key, name in sources.items() %}
+        <option value="{{ key }}" {% if key == train_source %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Pipeline
+      <select name="pipeline">
+        {% for key, name in pipelines.items() %}
+        <option value="{{ key }}" {% if key == pipeline %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Ảnh validation mẫu
+      <select name="sample" id="sample">
+        <option value="">Chọn ảnh mẫu</option>
+        {% for dataset in ['mcf', 'upfall'] %}
+        <optgroup label="{{ sources[dataset] }}">
+          {% for key, row in samples.items() if row.dataset == dataset %}
+          <option value="{{ key }}" data-image="{{ url_for('sample_image', sample_id=key) }}"
+                  {% if key == sample_id %}selected{% endif %}>{{ labels[row.label] }} · {{ key }}</option>
+          {% endfor %}
+        </optgroup>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Hoặc tải ảnh lên
+      <input id="upload" type="file" name="image" accept="image/jpeg,image/png,image/webp">
+    </label>
+  </div>
+  <img id="preview" class="preview" hidden alt="Ảnh đã chọn">
+  <button type="submit">Phân loại ảnh</button>
+</form>
+{% if result %}
+<div class="result" role="status">
+  <strong>Dự đoán {{ result }}</strong>
+  {% if truth %}<div>Nhãn gốc {{ truth }}</div>{% endif %}
+</div>
+{% elif error %}
+<p class="error" role="alert">{{ error }}</p>
+{% endif %}
+<script src="{{ url_for('static', filename='preview.js') }}"></script>
+{% endblock %}

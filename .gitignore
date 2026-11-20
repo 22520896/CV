@@ -1,0 +1,14 @@
+__pycache__/
+.ipynb_checkpoints/
+.venv/
+.env
+*.log
+*.joblib
+*.npy
+/papercode/prepare-dataset/prepared/
+/papercode/train/local-runs/
+/papercode/eval/models/*.zip
+/papercode/prepare-dataset/dataraw/mcf/*
+!/papercode/prepare-dataset/dataraw/mcf/examples/
+/papercode/prepare-dataset/dataraw/upfall/*
+!/papercode/prepare-dataset/dataraw/upfall/examples/
