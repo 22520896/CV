@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Dataset và camera{% endblock %}
+{% block body %}
+<h1>Dataset và camera</h1>
+<table>
+  <thead><tr><th>Bộ dữ liệu</th><th>Đầu vào</th><th>Camera</th><th>Ảnh dùng</th></tr></thead>
+  <tbody>
+    <tr><th>MCF</th><td>AVI, nhãn theo khoảng frame</td><td>8 góc đồng bộ</td><td>27.016</td></tr>
+    <tr><th>UP-Fall</th><td>Ảnh PNG, nhãn Tag theo timestamp</td><td>Camera 1, góc bên</td><td>44.245</td></tr>
+  </tbody>
+</table>
+<h2>MCF · Cùng thời điểm ở ba góc nhìn</h2>
+<div class="gallery">
+  {% for sample in camera_examples %}
+  <figure><img src="{{ url_for('sample_image', sample_id=sample) }}" alt="MCF {{ sample }}">
+  <figcaption>Camera {{ sample.split('_')[2][1:] }}</figcaption></figure>
+  {% endfor %}
+</div>
+<h2>UP-Fall · Ba ảnh trong một trial Camera 1</h2>
+<div class="gallery">
+  {% for sample in trial_examples %}
+  <figure><img src="{{ url_for('sample_image', sample_id=sample) }}" alt="UP-Fall {{ sample }}">
+  <figcaption>{{ labels[samples[sample].label] }}</figcaption></figure>
+  {% endfor %}
+</div>
+{% endblock %}

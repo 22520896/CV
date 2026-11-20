@@ -1,0 +1,14 @@
+Flask==3.1.2
+ipykernel>=6.29,<8
+ipython>=8.24,<10
+joblib==1.5.1
+keras==3.8.0
+matplotlib>=3.9,<4
+numpy==2.2.6
+opencv-python-headless==4.11.0.86
+pandas==2.3.0
+Pillow==11.2.1
+pypdf>=5,<7
+scikit-image==0.25.2
+scikit-learn==1.7.0
+torch==2.5.1
