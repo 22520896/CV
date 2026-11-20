@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Phân loại tình huống ngã và không ngã của người từ hình ảnh</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  <script id="demo-initial" type="application/json">{{ initial|tojson }}</script>
+</head>
+<body>
+  <div class="shell">
+    {% set active_page = 'demo' %}{% include '_header.html' %}
+    <p class="demo-intro">Chọn ảnh, chạy model và đối chiếu kết quả. Xem ý nghĩa 4 nhóm tư thế ở trang <a href="{{ url_for('datasets_page') }}">Dataset &amp; camera</a>.</p>
+
+    <section class="model-bar" aria-label="Chọn model">
+      <label class="field">Bộ model
+        <select id="dataset" data-testid="dataset-select">
+          {% for key, name in datasets.items() %}<option value="{{ key }}"{% if key == 'mix' %} selected{% endif %}>{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field" id="camera-field" hidden>Camera của ảnh validation
+        <select id="camera" data-testid="camera-select" aria-label="Camera">
+          {% for i in range(1,9) %}<option value="{{ i }}">Camera {{ i }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="field model-field">Model
+        <select id="model" data-testid="model-select" disabled><option>Đang tải danh sách…</option></select>
+      </label>
+    </section>
+
+    <main class="workspace">
+      <section class="panel picker" id="picker" aria-labelledby="picker-title">
+        <h2 id="picker-title">Chọn ảnh</h2>
+        <div class="source-tabs" role="tablist" aria-label="Nguồn ảnh">
+          <button type="button" role="tab" id="tab-real" data-source="real" aria-selected="true" aria-controls="library-panel">Ảnh real</button>
+          <button type="button" role="tab" id="tab-validation" data-source="validation" aria-selected="false" aria-controls="library-panel">Ảnh validation</button>
+          <button type="button" role="tab" id="tab-upload" data-source="upload" aria-selected="false" aria-controls="upload-panel">Tải ảnh lên</button>
+        </div>
+
+        <div id="library-panel" role="tabpanel" aria-labelledby="tab-real">
+          <div class="gallery-tools">
+            <label class="visually-hidden" for="posture-filter">Lọc tư thế</label>
+            <select id="posture-filter" data-testid="posture-filter"><option value="all">Tất cả tư thế</option></select>
+            <button type="button" class="text-button" id="random" data-testid="random-button" title="Lấy ngẫu nhiên từ toàn bộ ảnh phù hợp">
+              <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h2c4 0 6 10 10 10h2m-3-3 3 3-3 3M3 15h2c1.2 0 2.2-.9 3.2-2.3M12 7.3C13 5.9 14 5 15 5h2m-3-3 3 3-3 3"/></svg>Ngẫu nhiên
+            </button>
+          </div>
+          <p id="source-note" class="source-note">Ảnh ngoài dataset, có nhãn tham chiếu.</p>
+          <div id="gallery" class="gallery" aria-label="Thư viện ảnh" aria-busy="true"></div>
+          <div class="pagination">
+            <button type="button" class="quiet-button" id="previous-page" aria-label="Trang trước" disabled>← Trước</button>
+            <span id="page-info" aria-live="polite">Đang tải ảnh…</span>
+            <button type="button" class="quiet-button" id="next-page" aria-label="Trang sau" disabled>Sau →</button>
+          </div>
+        </div>
+
+        <div id="upload-panel" role="tabpanel" aria-labelledby="tab-upload" hidden>
+          <label class="upload-zone" id="upload-zone" for="image">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 32V10m-8 8 8-8 8 8M9 30v8a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3v-8"/></svg>
+            <strong>Chọn ảnh từ máy</strong><span>hoặc kéo thả ảnh vào đây</span><small>JPG, PNG, WebP · Tối đa 8 MB</small>
+            <input type="file" id="image" name="image" data-testid="image-input" accept="image/jpeg,image/png,image/webp">
+          </label>
+          <p id="upload-name" class="upload-name" aria-live="polite"></p>
+          <button type="button" class="quiet-button change-upload" id="change-upload" hidden>Chọn ảnh khác</button>
+        </div>
+        <p id="gallery-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section class="panel viewer" id="viewer" aria-labelledby="viewer-title">
+        <div class="viewer-heading"><h2 id="viewer-title">Ảnh & kết quả</h2><button type="button" class="text-button mobile-back" id="choose-another">Đổi ảnh</button></div>
+        <div class="preview-frame" id="preview-frame">
+          <div id="preview-empty" class="preview-empty">
+            <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="36" height="32" rx="4"/><path d="m7 32 10-10 9 9 6-6 10 10"/><circle cx="32" cy="17" r="3"/></svg>
+            <strong>Chưa chọn ảnh</strong><span>Chọn từ thư viện hoặc tải ảnh của bạn.</span>
+          </div>
+          <img id="preview-image" data-testid="preview-image" alt="Ảnh đã chọn" hidden>
+        </div>
+        <div class="image-caption"><span id="selected-title">Chưa có ảnh</span><span id="source-caption"></span></div>
+        <button type="button" class="primary-button" id="predict" data-testid="predict-button" disabled><span id="button-spinner" class="spinner" hidden></span><span id="button-label">Phân loại ảnh</span></button>
+
+        <div id="result" class="result" aria-live="polite" aria-atomic="true">
+          <div id="result-empty" class="result-empty">Kết quả sẽ hiển thị ở đây.</div>
+          <div id="result-content" data-testid="prediction-result" hidden>
+            <div class="result-top"><span class="overline">Dự đoán</span><span id="match-badge" class="match-badge" hidden></span></div>
+            <div class="prediction"><span id="prediction-code" class="posture-code"></span><strong id="prediction-label"></strong></div>
+            <div id="reference" class="reference" hidden></div>
+            <a id="image-credit" class="reference" hidden></a>
+            <div class="result-bottom"><span id="result-model"></span><span id="result-time"></span></div>
+          </div>
+        </div>
+        <p id="prediction-error" class="error" role="alert" data-testid="error-message" hidden></p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
