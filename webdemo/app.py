@@ -18,6 +18,7 @@ Image.MAX_IMAGE_PIXELS = 20_000_000
 PAPER = Path(__file__).resolve().parents[1] / "papercode"
 PREPARE = PAPER / "prepare-dataset"
 MODELS = PAPER / "eval/models"
+REALDATA = Path(__file__).resolve().parent / "realdata"
 INDEX = json.loads((MODELS / "index.json").read_text(encoding="utf-8"))
 DATASETS = {"mcf": "MCF", "upfall": "UP-Fall", "mix": "MCF + UP-Fall"}
 LABELS = INDEX["labels"]
@@ -38,6 +39,12 @@ def examples():
         for path in sorted(images.glob("*.png")):
             row = rows[path.stem]
             samples[path.stem] = dict(path=path, dataset=dataset, label=int(row["label"]), split=row["split"])
+    for sample in json.loads((REALDATA / "samples.json").read_text(encoding="utf-8")):
+        sample_id = sample["id"]
+        samples[sample_id] = {
+            **sample, "dataset": "real", "split": "external",
+            "path": REALDATA / "images" / f"{sample_id}.png",
+        }
     return samples
 
 
@@ -65,7 +72,7 @@ def demo():
     train_source = request.form.get("train_source", "mix")
     pipeline = request.form.get("pipeline", "hog_svm_rbf")
     sample_id = request.form.get("sample", "")
-    result = error = truth = None
+    result = error = truth = sample = None
     if request.method == "POST":
         if train_source not in DATASETS or pipeline not in PIPELINES:
             abort(400)
@@ -89,10 +96,10 @@ def demo():
             error = "Ảnh vượt giới hạn kích thước."
         except (ValueError, OSError) as exc:
             error = str(exc)
-    choices = {key: row for key, row in SAMPLES.items() if row["split"] == "validation"}
+    choices = {key: row for key, row in SAMPLES.items() if row["split"] in ("validation", "external")}
     return render_template("demo.html", sources=DATASETS, pipelines=PIPELINES, samples=choices,
                            labels=LABELS, train_source=train_source, pipeline=pipeline,
-                           sample_id=sample_id, result=result, truth=truth, error=error)
+                           sample_id=sample_id, result=result, truth=truth, sample=sample, error=error)
 
 
 @app.get("/samples/<sample_id>")
