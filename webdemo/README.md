@@ -1,8 +1,9 @@
 # Web demo
 
 - Chọn tập huấn luyện MCF, UP-Fall hoặc Mix, rồi chọn pipeline.
-- Chọn 9 ảnh validation mẫu, 26 ảnh thực tế hoặc tải ảnh JPG, PNG hay WebP lên.
-- Trang **Dataset và camera** cho xem ba góc MCF cùng thời điểm và ba ảnh theo thứ tự trong một trial UP-Fall.
+- Chọn ảnh validation 80:20, 26 ảnh thực tế hoặc tải ảnh JPG, PNG hay WebP lên.
+- Trang **Dataset & camera** cho xem đủ 8 góc MCF cùng thời điểm. Camera lọc ảnh validation và cả 8 góc dùng chung model MCF.
+- Bộ model khớp benchmark báo cáo. P4 là **Ngồi** cho MCF, UP-Fall và Mix.
 
 ## Ảnh thực tế
 
@@ -22,3 +23,5 @@ python -m webdemo.app
 Mở [demo tại cổng 5000](http://127.0.0.1:5000). HOG chạy trên CPU. ResNet tải trọng số ImageNet của Keras trong lần chạy đầu, rồi dùng GPU nếu có.
 
 Mã kiểm tra SHA-256 của từng checkpoint theo [index.json](../papercode/eval/models/index.json) trước khi nạp. Để dùng model đã tải ở nơi khác, đặt biến CV_MODEL_DIR đến thư mục chứa các thư mục con mcf, upfall và mix.
+
+Repo có sẵn ảnh mẫu. Web cũng đọc ảnh validation đã dựng tại papercode/prepare-dataset/prepared. Đặt CV_FRAME_STORE đến thư mục data của dự án CV-UPFALL nếu đã có ảnh RGB128 ở đó. Thư viện chỉ hiện file ảnh có sẵn và thuộc [split đã lưu](../papercode/prepare-dataset/splits).
