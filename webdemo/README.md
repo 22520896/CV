@@ -1,8 +1,13 @@
 # Web demo
 
 - Chọn tập huấn luyện MCF, UP-Fall hoặc Mix, rồi chọn pipeline.
-- Chọn ảnh validation mẫu hoặc tải ảnh JPG, PNG hay WebP lên.
+- Chọn 9 ảnh validation mẫu, 26 ảnh thực tế hoặc tải ảnh JPG, PNG hay WebP lên.
 - Trang **Dataset và camera** cho xem ba góc MCF cùng thời điểm và ba ảnh theo thứ tự trong một trial UP-Fall.
+
+## Ảnh thực tế
+
+- 26 ảnh gồm 9 đi/đứng, 8 nằm và 9 đang ngã. Nhãn tham chiếu được gán trước khi dự đoán. Ảnh chỉ dùng để thử web ngoài bộ MCF và UP-Fall.
+- Nguồn và giấy phép từng ảnh có trong [samples.json](realdata/samples.json). Ảnh RealBiomFall được trích từ clip theo timestamp. Ảnh Wikimedia Commons được chuyển từ JPEG sang PNG.
 
 ## Cài và chạy
 

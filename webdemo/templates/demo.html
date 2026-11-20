@@ -18,11 +18,11 @@
         {% endfor %}
       </select>
     </label>
-    <label>Ảnh validation mẫu
+    <label>Ảnh mẫu
       <select name="sample" id="sample">
         <option value="">Chọn ảnh mẫu</option>
-        {% for dataset in ['mcf', 'upfall'] %}
-        <optgroup label="{{ sources[dataset] }}">
+        {% for dataset, group in [('real', 'Ảnh thực tế'), ('mcf', 'Validation MCF'), ('upfall', 'Validation UP-Fall')] %}
+        <optgroup label="{{ group }}">
           {% for key, row in samples.items() if row.dataset == dataset %}
           <option value="{{ key }}" data-image="{{ url_for('sample_image', sample_id=key) }}"
                   {% if key == sample_id %}selected{% endif %}>{{ labels[row.label] }} · {{ key }}</option>
@@ -41,7 +41,15 @@
 {% if result %}
 <div class="result" role="status">
   <strong>Dự đoán {{ result }}</strong>
-  {% if truth %}<div>Nhãn gốc {{ truth }}</div>{% endif %}
+  {% if truth %}
+  <div>{{ 'Nhãn tham chiếu' if sample.dataset == 'real' else 'Nhãn gốc' }} {{ truth }}</div>
+  {% endif %}
+  {% if sample and sample.dataset == 'real' %}
+  <div><a href="{{ sample.source }}">{{ sample.title }}</a> · {{ sample.author }} ·
+    {% if sample.license_url %}<a href="{{ sample.license_url }}">{{ sample.license }}</a>
+    {% else %}{{ sample.license }}{% endif %}
+  </div>
+  {% endif %}
 </div>
 {% elif error %}
 <p class="error" role="alert">{{ error }}</p>
