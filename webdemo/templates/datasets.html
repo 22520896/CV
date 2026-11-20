@@ -4,17 +4,75 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Dataset &amp; camera · Phân loại tình huống ngã và không ngã của người từ hình ảnh</title>
+  <title>Dataset &amp; camera · {{ project_title }}</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='image-viewer.js') }}" defer></script>
   <script src="{{ url_for('static', filename='datasets.js') }}" defer></script>
 </head>
 <body>
   <div class="shell">
     {% set active_page = 'datasets' %}{% include '_header.html' %}
     <main class="dataset-page">
-      <section class="panel" aria-labelledby="dataset-title">
-        <h2 id="dataset-title">MCF và UP-Fall khác nhau thế nào?</h2>
+      <section class="panel" aria-labelledby="labels-title">
+        <div class="posture-toolbar">
+          <h2 id="labels-title">Bốn nhãn tư thế P1–P4</h2>
+          <button type="button" class="quiet-button" id="shuffle-postures"
+                  data-url="{{ url_for('shuffle_postures') }}">
+            <span aria-hidden="true">⤨</span> Đổi ảnh ngẫu nhiên
+          </button>
+        </div>
+        <p class="section-intro">Chọn ảnh để dự đoán</p>
+        <div id="posture-examples">
+          {% include '_posture_examples.html' %}
+        </div>
+        <p id="posture-status" class="visually-hidden" role="status"></p>
+        <p id="posture-error" class="error" role="alert" hidden></p>
+      </section>
+
+      <section class="panel camera-section" aria-labelledby="cameras-title">
+        <h2 id="cameras-title">Một thời điểm, 8 góc nhìn MCF</h2>
+        <p class="section-intro">Camera khác vị trí nên người có thể to hoặc nhỏ, đổi hướng hoặc bị che khuất. Bấm vào ảnh để dự đoán.</p>
+        <div class="camera-tools">
+          <label class="field">Scenario <select id="scenario" data-testid="scenario-select">{% for i in scenarios %}<option value="{{ i }}">Scenario {{ i }}</option>{% endfor %}</select></label>
+          <label class="field">Tư thế <select id="camera-posture" data-testid="camera-posture-select"><option value="all">Tất cả tư thế</option>{% for label in labels %}<option value="{{ loop.index0 }}"{% if not initial.label_counts[loop.index0] %} disabled{% endif %}>P{{ loop.index }} · {{ label }}</option>{% endfor %}</select></label>
+        </div>
+        <div class="camera-moment-bar">
+          <p id="camera-status" class="camera-status" aria-live="polite">{{ initial.caption }}</p>
+          <div class="camera-stepper">
+            <button type="button" id="random-moment" class="quiet-button" data-count="{{ initial.count }}"
+                    title="Đổi thời điểm trong Scenario và tư thế hiện tại"{% if initial.count < 2 %} disabled{% endif %}>Đổi ngẫu nhiên</button>
+            <button type="button" id="earlier" class="quiet-button" aria-label="Thời điểm trước" disabled>← Trước</button>
+            <span id="moment-position" aria-live="polite">1 / {{ initial.count }}</span>
+            <button type="button" id="later" class="quiet-button" aria-label="Thời điểm sau"{% if initial.count < 2 %} disabled{% endif %}>Sau →</button>
+          </div>
+        </div>
+        <div id="camera-grid" class="camera-grid" aria-busy="false">
+          {% for view in initial.views %}
+          <div class="zoom-frame">
+            <a class="camera-card" href="{{ view.demo_url }}" data-camera="{{ view.camera }}" data-demo-url="{{ view.demo_url }}"><img src="{{ view.image_url }}" alt="Camera {{ view.camera }} · {{ initial.caption }}" width="128" height="128"><span><strong>Camera {{ view.camera }}</strong><small class="camera-action">Thử ảnh này →</small></span></a>
+            <button type="button" class="zoom-control" data-zoom-src="{{ view.image_url }}"
+                    data-zoom-label="Camera {{ view.camera }} · {{ initial.caption }}"
+                    aria-label="Phóng to ảnh Camera {{ view.camera }}" title="Phóng to ảnh">⤢</button>
+          </div>
+          {% endfor %}
+        </div>
+        <p id="camera-error" class="error" role="alert" hidden></p>
+        <div class="camera-compare">
+          <label class="field">Model MCF
+            <select id="camera-model"{% if not camera_model %} disabled{% endif %}>
+              {% for model in camera_models %}<option value="{{ model.id }}"{% if model.id == camera_model %} selected{% endif %}{% if not model.available %} disabled{% endif %}>{{ model.name }}{% if not model.available %} · Chưa có{% endif %}</option>{% endfor %}
+            </select>
+          </label>
+          <div class="camera-run">
+            <button type="button" id="compare-cameras" class="primary-button"{% if not camera_model or not initial.views %} disabled{% endif %}>So sánh dự đoán</button>
+            <span id="camera-comparison-status" class="camera-comparison-status" role="status"></span>
+          </div>
+        </div>
+        <p id="camera-prediction-error" class="error" role="alert" hidden></p>
+      </section>
+      <details class="dataset-details">
+        <summary><span class="info-icon" aria-hidden="true">!</span> MCF và UP-Fall khác nhau thế nào?</summary>
         <p class="section-intro">Ba bộ model được huấn luyện trên MCF, UP-Fall và tập gộp MCF + UP-Fall. Cả ba dùng cùng bốn nhãn tư thế.</p>
         <div class="comparison-scroll">
           <table class="comparison-table">
@@ -31,52 +89,10 @@
           </table>
         </div>
         <p class="section-note">Chia phân tầng 80% train / 20% validation. Cả 8 ảnh MCF cùng thời điểm vào cùng tập và fold. Mix ghép hai phần train và hai phần validation tương ứng.</p>
-      </section>
+      </details>
 
-      <section class="panel" aria-labelledby="labels-title">
-        <h2 id="labels-title">Bốn nhãn tư thế P1–P4</h2>
-        <p class="section-intro">Bấm vào ảnh validation để thử dự đoán trong demo.</p>
-        <div class="posture-comparison">
-          <div class="posture-heading">Nhóm</div><div class="posture-heading">MCF</div><div class="posture-heading">UP-Fall · Camera 1</div>
-          {% for row in example_rows %}
-            {% set label = labels[loop.index0] %}
-            <div class="posture-row-label"><span class="posture-code">P{{ loop.index }}</span></div>
-            {% for sample in row %}
-            {% if sample %}
-            <a class="posture-example" href="{{ sample.demo_url }}" aria-label="Thử {{ sample.title }} · {{ label }} trong demo">
-              <img src="{{ sample.image_url }}" alt="{{ sample.title }} · {{ label }}" width="128" height="128" loading="lazy">
-              <span><strong>{{ label }}</strong></span>
-            </a>
-            {% else %}
-            <div class="posture-example"><span><strong>{{ label }}</strong></span></div>
-            {% endif %}
-            {% endfor %}
-          {% endfor %}
-        </div>
-      </section>
-
-      <section class="panel camera-section" aria-labelledby="cameras-title">
-        <h2 id="cameras-title">Một thời điểm, 8 góc nhìn MCF</h2>
-        <p class="section-intro">Camera khác vị trí nên người có thể to hoặc nhỏ, đổi hướng hoặc bị che khuất. Bấm vào ảnh để thử cùng bộ model MCF.</p>
-        <div class="camera-tools">
-          <label class="field">Scenario <select id="scenario" data-testid="scenario-select">{% for i in scenarios %}<option value="{{ i }}">Scenario {{ i }}</option>{% endfor %}</select></label>
-          <label class="field">Tư thế <select id="camera-posture" data-testid="camera-posture-select"><option value="all">Tất cả tư thế</option>{% for label in labels %}<option value="{{ loop.index0 }}"{% if not initial.label_counts[loop.index0] %} disabled{% endif %}>P{{ loop.index }} · {{ label }}</option>{% endfor %}</select></label>
-          <div class="camera-stepper"><button type="button" id="earlier" class="quiet-button" aria-label="Thời điểm trước" disabled>← Trước</button><span id="moment-position" aria-live="polite">1 / {{ initial.count }}</span><button type="button" id="later" class="quiet-button" aria-label="Thời điểm sau"{% if initial.count < 2 %} disabled{% endif %}>Sau →</button></div>
-        </div>
-        <p id="camera-status" class="camera-status" aria-live="polite">{{ initial.caption }}</p>
-        <div id="camera-grid" class="camera-grid" aria-busy="false">
-          {% for view in initial.views %}
-          {% if view.demo_url %}
-          <a class="camera-card" href="{{ view.demo_url }}"><img src="{{ view.image_url }}" alt="Camera {{ view.camera }} · {{ initial.caption }}" width="128" height="128"><span><strong>Camera {{ view.camera }}</strong><small>Thử ảnh này →</small></span></a>
-          {% else %}
-          <div class="camera-card"><span><strong>Camera {{ view.camera }}</strong><small>Chưa có ảnh trên máy</small></span></div>
-          {% endif %}
-          {% endfor %}
-        </div>
-        <p id="camera-error" class="error" role="alert" hidden></p>
-        <p class="section-note">Thư viện hiển thị các mốc validation đã có ảnh từ đủ 8 camera. Ảnh được ghép theo mốc đồng bộ đã lưu.</p>
-      </section>
     </main>
   </div>
+  {% include '_image_viewer.html' %}
 </body>
 </html>

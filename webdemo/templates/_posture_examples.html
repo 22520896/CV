@@ -1,0 +1,29 @@
+{% for dataset_key, dataset in [('mcf', 'MCF'), ('upfall', 'UP-Fall')] %}
+  {% set dataset_index = loop.index0 %}
+  <section class="posture-dataset posture-dataset--{{ dataset_key }}" aria-labelledby="posture-{{ dataset_key }}">
+    <h3 class="posture-dataset-title" id="posture-{{ dataset_key }}">{{ dataset }}</h3>
+    <div class="camera-grid">
+      {% for row in example_rows %}
+        {% set code = 'P' ~ loop.index %}
+        {% set label = labels[loop.index0] %}
+        {% set sample = row[dataset_index] %}
+        {% if sample %}
+          <div class="zoom-frame" data-posture-sample="{{ sample.id }}">
+            <a class="camera-card" href="{{ sample.demo_url }}" aria-label="Thử ảnh {{ code }} {{ label }} của {{ dataset }}">
+              <img src="{{ sample.image_url }}" alt="{{ dataset }} · {{ code }} · {{ label }}" width="128" height="128" loading="lazy">
+              <span class="posture-card-label"><span class="posture-code">{{ code }}</span><strong>{{ label }}</strong></span>
+            </a>
+            <button type="button" class="zoom-control" data-zoom-src="{{ sample.image_url }}"
+                    data-zoom-label="{{ dataset }} · {{ code }} · {{ label }}"
+                    aria-label="Phóng to ảnh {{ code }} của {{ dataset }}" title="Phóng to ảnh">⤢</button>
+          </div>
+        {% else %}
+          <div class="camera-card">
+            <div class="image-missing">Chưa có ảnh</div>
+            <span class="posture-card-label"><span class="posture-code">{{ code }}</span><strong>{{ label }}</strong></span>
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  </section>
+{% endfor %}

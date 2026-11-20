@@ -10,6 +10,7 @@ from pathlib import Path, PureWindowsPath
 from threading import Lock
 
 import joblib
+import numpy as np
 from flask import Flask, abort, jsonify, render_template, request, send_file, url_for
 from PIL import Image, ImageOps, UnidentifiedImageError
 from threadpoolctl import threadpool_limits
@@ -21,6 +22,7 @@ from webdemo.features import hog_vector, resnet_vector, rgb128
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 app.json.ensure_ascii = False
+app.jinja_env.globals["project_title"] = "Phân loại tư thế người từ dữ liệu hình ảnh trong các tình huống sinh hoạt và té ngã"
 Image.MAX_IMAGE_PIXELS = 20_000_000
 MODELS = PAPER / "eval/models"
 INDEX = json.loads((MODELS / "index.json").read_text(encoding="utf-8"))
@@ -72,10 +74,16 @@ def load_model(dataset, pipeline):
     return bundle["model"]
 
 
-@lru_cache(maxsize=10)
-def validation_samples(dataset, camera):
+@lru_cache(maxsize=64)
+def validation_samples(dataset, camera, label=None):
+    if dataset == "mix":
+        pools = (validation_samples("mcf", None, label), validation_samples("upfall", None, label))
+        # Spread each dataset proportionally through the gallery while keeping page order stable.
+        ranked = ((index / len(pool), item) for pool in pools for index, item in enumerate(pool))
+        return tuple(item for _, item in sorted(ranked, key=lambda entry: entry[0]))
     return tuple(item for item in VALIDATION.values()
-                 if dataset == "mix" or (item.dataset == dataset and item.camera == camera))
+                 if item.dataset == dataset and (camera is None or item.camera == camera)
+                 and (label is None or item.label == label))
 
 
 def sample_reference(item):
@@ -86,26 +94,38 @@ def sample_reference(item):
 def sample_json(item, order):
     source = "real" if item.credit else "validation"
     title = f"Ảnh {order:02d}" if source == "real" else f"{DATASETS[item.dataset]} · Ảnh {order:02d}"
-    return {"id": item.id, "source": source, "order": order, "title": title,
-            "reference": sample_reference(item), "image_url": url_for("media", source=source, identifier=item.id),
-            "thumbnail_url": url_for("media", source=source, identifier=item.id, thumb=1)}
+    sample = {"id": item.id, "source": source, "order": order, "title": title,
+              "reference": sample_reference(item), "image_url": url_for("media", source=source, identifier=item.id),
+              "thumbnail_url": url_for("media", source=source, identifier=item.id, thumb=1)}
+    if source == "validation":
+        sample.update(dataset=item.dataset, dataset_name=DATASETS[item.dataset])
+    elif item.size:
+        sample.update(width=item.size[0], height=item.size[1])
+    return sample
 
 
 def library(values):
     dataset, camera = context(values)
     source = values.get("source", "real")
-    if source == "real":
-        items = tuple(REAL.values())
-    elif source == "validation":
-        items = validation_samples(dataset, camera)
-    else:
-        raise ValueError("Nguồn ảnh không hợp lệ.")
     label = values.get("label", "all")
-    if label == "all":
-        return items
-    if label not in ("0", "1", "2", "3"):
+    if label not in ("all", "0", "1", "2", "3"):
         raise ValueError("Bộ lọc tư thế không hợp lệ.")
-    return tuple(item for item in items if item.label == int(label))
+    class_id = None if label == "all" else int(label)
+    if source == "real":
+        matches = (item for item in REAL.values() if class_id is None or item.label == class_id)
+        return sorted(matches, key=lambda item: item.size[0] / item.size[1] if item.size else 0, reverse=True)
+    if source != "validation":
+        raise ValueError("Nguồn ảnh không hợp lệ.")
+
+    validation_dataset = values.get("validation_dataset", "all")
+    if validation_dataset not in ("all", "mcf", "upfall"):
+        raise ValueError("Bộ lọc dataset không hợp lệ.")
+    if validation_dataset != "all":
+        if dataset == "mix":
+            dataset, camera = validation_dataset, None
+        elif dataset != validation_dataset:
+            return ()
+    return validation_samples(dataset, camera, class_id)
 
 
 @app.get("/")
@@ -117,9 +137,12 @@ def index():
         order = next((number for number, item in enumerate(rows, 1) if item.id == sample_id), None)
         if order is None:
             abort(404)
+        pipeline = request.args.get("model")
+        if pipeline is not None and pipeline not in PIPELINES:
+            raise ValueError("Model đã chọn không hợp lệ.")
         selected = {"dataset": dataset, "camera": camera, "sample": sample_json(rows[order - 1], order),
-                    "page": (order - 1) // PAGE_SIZE + 1}
-    return render_template("index.html", initial=selected, datasets=DATASETS)
+                    "page": (order - 1) // PAGE_SIZE + 1, "model": pipeline}
+    return render_template("index.html", initial=selected, datasets=DATASETS, labels=LABELS)
 
 
 @app.template_filter("vn_number")
@@ -132,6 +155,27 @@ def dataset_example(item):
         return None
     return {**sample_json(item, 1),
             "demo_url": url_for("index", dataset=item.dataset, camera=item.camera, sample=item.id)}
+
+
+@lru_cache(maxsize=8)
+def posture_samples(dataset, label):
+    return tuple(item for item in VALIDATION.values() if item.dataset == dataset and item.label == label)
+
+
+def posture_examples(previous=None):
+    rows = []
+    for label in range(len(LABELS)):
+        row = []
+        for dataset in ("mcf", "upfall"):
+            pool = posture_samples(dataset, label)
+            if previous is None:
+                item = min(pool, key=lambda item: item.camera, default=None)
+            else:
+                options = tuple(item for item in pool if item.id not in previous) or pool
+                item = secrets.choice(options) if options else None
+            row.append(dataset_example(item))
+        rows.append(row)
+    return rows
 
 
 def camera_payload(scenario, label="all", index=0):
@@ -148,21 +192,26 @@ def camera_payload(scenario, label="all", index=0):
         for item in selected[index]:
             views.append({**dataset_example(item), "camera": item.camera})
         first = selected[index][0]
-        caption = f"P{first.label + 1} · {LABELS[first.label]} · Mốc đồng bộ {first.time_row}"
+        caption = f"P{first.label + 1} · {LABELS[first.label]}"
     return {"count": len(selected), "index": index if selected else 0, "caption": caption, "views": views,
             "label_counts": [counts[label] for label in range(4)]}
 
 
 @app.get("/datasets")
 def datasets_page():
-    examples = {dataset: {} for dataset in ("mcf", "upfall")}
-    for item in sorted(VALIDATION.values(), key=lambda item: item.camera):
-        examples[item.dataset].setdefault(item.label, item)
     initial = camera_payload(min(MOMENTS))
-    rows = [[dataset_example(examples[dataset].get(label)) for dataset in ("mcf", "upfall")]
-            for label in range(4)]
-    return render_template("datasets.html", summaries=SUMMARIES, example_rows=rows, labels=LABELS,
-                           scenarios=sorted(MOMENTS), initial=initial)
+    models = model_options("mcf")
+    available = [model for model in models if model["available"]]
+    default = next((model["id"] for model in available if model["id"] == "hog_svm_rbf"),
+                   available[0]["id"] if available else None)
+    return render_template("datasets.html", summaries=SUMMARIES, example_rows=posture_examples(), labels=LABELS,
+                           scenarios=sorted(MOMENTS), initial=initial, camera_models=models, camera_model=default)
+
+
+@app.get("/datasets/postures")
+def shuffle_postures():
+    previous = set(request.args.getlist("exclude")[:8])
+    return render_template("_posture_examples.html", example_rows=posture_examples(previous), labels=LABELS)
 
 
 @app.get("/api/datasets/cameras")
@@ -171,12 +220,49 @@ def camera_comparison():
                                   request.args.get("label", "all"), int(request.args.get("index", 0))))
 
 
+@app.post("/api/datasets/cameras/predict")
+def predict_camera_views():
+    options = request.get_json(silent=True)
+    if not isinstance(options, dict):
+        raise ValueError("Yêu cầu so sánh camera không hợp lệ.")
+    scenario, index = options.get("scenario"), options.get("index")
+    pipeline = options.get("model")
+    if not isinstance(scenario, int) or not isinstance(index, int):
+        raise ValueError("Chọn scenario và thời điểm trước khi so sánh.")
+    if not isinstance(pipeline, str) or pipeline not in PIPELINES:
+        raise ValueError("Chọn model MCF trước khi so sánh.")
+
+    views = camera_payload(scenario, options.get("label", "all"), index)["views"]
+    if not views:
+        abort(404, "Chưa có ảnh để so sánh.")
+
+    items = [VALIDATION[view["id"]] for view in views]
+    extract = hog_vector if pipeline.startswith("hog_") else resnet_vector
+    with MODEL_LOCK, threadpool_limits(limits=2):
+        classifier = load_model("mcf", pipeline)
+        vectors = []
+        for item in items:
+            with Image.open(item.path) as image:
+                vectors.append(extract(image))
+        predictions = classifier.predict(np.stack(vectors))
+
+    results = []
+    for item, label in zip(items, predictions):
+        results.append({"camera": item.camera, "code": f"P{label + 1}", "label": LABELS[label],
+                        "correct": bool(label == item.label),
+                        "demo_url": url_for("index", dataset="mcf", camera=item.camera, sample=item.id, model=pipeline)})
+    return jsonify(results=results)
+
+
+def model_options(dataset):
+    return [{"id": model_id, "name": name, "available": model_path(INDEX["models"][dataset][model_id]).is_file()}
+            for model_id, name in PIPELINES.items()]
+
+
 @app.get("/api/config")
 def configuration():
     dataset, camera = context(request.args)
-    models = [{"id": model_id, "name": name, "available": model_path(INDEX["models"][dataset][model_id]).is_file()}
-              for model_id, name in PIPELINES.items()]
-    return jsonify(models=models, labels=LABELS, dataset=dataset, camera=camera)
+    return jsonify(models=model_options(dataset), labels=LABELS, dataset=dataset, camera=camera)
 
 
 @app.get("/api/samples")
@@ -257,15 +343,42 @@ def upload():
                    reference=None, image_url=url_for("media", source="upload", identifier=identifier))
 
 
+def classify_with_scores(classifier, features, pipeline):
+    if hasattr(classifier, "predict_proba"):
+        values = classifier.predict_proba(features)[0]
+        kind = "neighbor_votes" if pipeline.endswith("_knn") else "probability"
+    else:
+        margins = classifier.decision_function(features)[0]
+        if pipeline.endswith("_svm_rbf") and classifier.decision_function_shape == "ovr":
+            # scikit-learn 1.7 returns the pairwise vote count plus a tie-break term in (-1/3, 1/3).
+            votes = np.rint(margins).astype(int)
+            values = votes / votes.sum()
+            kind = "pairwise_votes"
+        else:
+            weights = np.exp(margins - margins.max())
+            values = weights / weights.sum()
+            kind = "relative_score"
+    # Distance-weighted KNN predicts the class with the highest vote share.
+    prediction = classifier.classes_[values.argmax()] if kind == "neighbor_votes" else classifier.predict(features)[0]
+    scores = {int(label): float(value) for label, value in zip(classifier.classes_, values)}
+    return int(prediction), {"kind": kind, "by_class": scores}
+
+
 @app.post("/api/predict")
 def predict():
     values = request.get_json(silent=True)
     if not isinstance(values, dict):
         raise ValueError("Yêu cầu phân loại không hợp lệ.")
     dataset, camera = context(values)
-    pipeline, source, identifier = (values.get(key) for key in ("model", "source", "id"))
-    if not all(isinstance(value, str) for value in (pipeline, source, identifier)) or pipeline not in PIPELINES:
-        raise ValueError("Chọn ảnh và model trước khi phân loại.")
+    source, identifier = values.get("source"), values.get("id")
+    if not isinstance(source, str) or not isinstance(identifier, str):
+        raise ValueError("Chọn ảnh trước khi phân loại.")
+    batch = "models" in values
+    pipelines = values.get("models") if batch else [values.get("model")]
+    if (not isinstance(pipelines, list) or not 1 <= len(pipelines) <= len(PIPELINES)
+            or any(not isinstance(model, str) or model not in PIPELINES for model in pipelines)
+            or len(set(pipelines)) != len(pipelines)):
+        raise ValueError("Chọn ít nhất một model hợp lệ trước khi phân loại.")
     reference = None
     if source == "upload":
         data, _ = uploaded_image(identifier)
@@ -280,15 +393,31 @@ def predict():
         reference = sample_reference(item)
         location = item.path
 
-    started = time.perf_counter()
+    results = []
+    vectors = {}
     with MODEL_LOCK, threadpool_limits(limits=2), Image.open(location) as image:
-        classifier = load_model(dataset, pipeline)
-        vector = hog_vector(image) if pipeline.startswith("hog_") else resnet_vector(image)
-        label = int(classifier.predict(vector.reshape(1, -1))[0])
-    elapsed = (time.perf_counter() - started) * 1000
-    result = {"class_id": label, "code": f"P{label + 1}", "label": LABELS[label], "elapsed_ms": elapsed,
-              "model_name": f"{DATASETS[dataset]} · {PIPELINES[pipeline]}"}
-    return jsonify(prediction=result, reference=reference, correct=label == reference["class_id"] if reference else None)
+        for pipeline in pipelines:
+            started = time.perf_counter()
+            pipeline_name = PIPELINES[pipeline]
+            extractor = hog_vector if pipeline.startswith("hog_") else resnet_vector
+            try:
+                classifier = load_model(dataset, pipeline)
+                if extractor not in vectors:
+                    vectors[extractor] = extractor(image).reshape(1, -1)
+                label, scores = classify_with_scores(classifier, vectors[extractor], pipeline)
+            except ValueError as error:
+                if not batch:
+                    raise
+                results.append({"pipeline_name": pipeline_name, "error": str(error)})
+                continue
+            elapsed = (time.perf_counter() - started) * 1000
+            prediction = {"class_id": label, "code": f"P{label + 1}", "label": LABELS[label], "elapsed_ms": elapsed,
+                          "model_name": f"{DATASETS[dataset]} · {pipeline_name}", "pipeline_name": pipeline_name,
+                          "scores": scores}
+            results.append({"prediction": prediction, "correct": label == reference["class_id"] if reference else None})
+    if batch:
+        return jsonify(results=results, reference=reference)
+    return jsonify(**results[0], reference=reference)
 
 
 @app.errorhandler(ValueError)

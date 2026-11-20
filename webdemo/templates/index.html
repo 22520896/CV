@@ -4,31 +4,29 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Phân loại tình huống ngã và không ngã của người từ hình ảnh</title>
+  <title>{{ project_title }}</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='image-viewer.js') }}" defer></script>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
   <script id="demo-initial" type="application/json">{{ initial|tojson }}</script>
 </head>
 <body>
   <div class="shell">
     {% set active_page = 'demo' %}{% include '_header.html' %}
-    <p class="demo-intro">Chọn ảnh, chạy model và đối chiếu kết quả. Xem ý nghĩa 4 nhóm tư thế ở trang <a href="{{ url_for('datasets_page') }}">Dataset &amp; camera</a>.</p>
-
-    <section class="model-bar" aria-label="Chọn model">
+    <section class="panel model-bar" aria-label="Chọn model">
       <label class="field">Bộ model
         <select id="dataset" data-testid="dataset-select">
           {% for key, name in datasets.items() %}<option value="{{ key }}"{% if key == 'mix' %} selected{% endif %}>{{ name }}</option>{% endfor %}
         </select>
       </label>
-      <label class="field" id="camera-field" hidden>Camera của ảnh validation
-        <select id="camera" data-testid="camera-select" aria-label="Camera">
-          {% for i in range(1,9) %}<option value="{{ i }}">Camera {{ i }}</option>{% endfor %}
-        </select>
-      </label>
-      <label class="field model-field">Model
-        <select id="model" data-testid="model-select" disabled><option>Đang tải danh sách…</option></select>
-      </label>
+      <div class="field model-field">
+        <span id="model-label">Model</span>
+        <details id="model-menu" class="model-menu">
+          <summary id="model-summary" aria-labelledby="model-label model-summary-text"><span id="model-summary-text">Đang tải danh sách…</span></summary>
+          <div id="model-options" class="model-options" role="group" aria-labelledby="model-label"></div>
+        </details>
+      </div>
     </section>
 
     <main class="workspace">
@@ -42,13 +40,21 @@
 
         <div id="library-panel" role="tabpanel" aria-labelledby="tab-real">
           <div class="gallery-tools">
+            <select id="validation-dataset-filter" aria-label="Lọc ảnh validation theo dataset" hidden>
+              <option value="all">Tất cả dataset</option>
+              <option value="mcf">{{ datasets.mcf }}</option>
+              <option value="upfall">{{ datasets.upfall }}</option>
+            </select>
+            <select id="camera" data-testid="camera-select" aria-label="Lọc ảnh validation theo camera" hidden>
+              {% for i in range(1,9) %}<option value="{{ i }}">Camera {{ i }}</option>{% endfor %}
+            </select>
             <label class="visually-hidden" for="posture-filter">Lọc tư thế</label>
             <select id="posture-filter" data-testid="posture-filter"><option value="all">Tất cả tư thế</option></select>
             <button type="button" class="text-button" id="random" data-testid="random-button" title="Lấy ngẫu nhiên từ toàn bộ ảnh phù hợp">
               <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h2c4 0 6 10 10 10h2m-3-3 3 3-3 3M3 15h2c1.2 0 2.2-.9 3.2-2.3M12 7.3C13 5.9 14 5 15 5h2m-3-3 3 3-3 3"/></svg>Ngẫu nhiên
             </button>
           </div>
-          <p id="source-note" class="source-note">Ảnh ngoài dataset, có nhãn tham chiếu.</p>
+          <p id="source-note" class="source-note">Ảnh ngoài MCF và UP-Fall, được tuyển chọn để demo.</p>
           <div id="gallery" class="gallery" aria-label="Thư viện ảnh" aria-busy="true"></div>
           <div class="pagination">
             <button type="button" class="quiet-button" id="previous-page" aria-label="Trang trước" disabled>← Trước</button>
@@ -71,12 +77,14 @@
 
       <section class="panel viewer" id="viewer" aria-labelledby="viewer-title">
         <div class="viewer-heading"><h2 id="viewer-title">Ảnh & kết quả</h2><button type="button" class="text-button mobile-back" id="choose-another">Đổi ảnh</button></div>
-        <div class="preview-frame" id="preview-frame">
+        <div class="preview-frame zoom-frame" id="preview-frame">
           <div id="preview-empty" class="preview-empty">
             <svg viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="8" width="36" height="32" rx="4"/><path d="m7 32 10-10 9 9 6-6 10 10"/><circle cx="32" cy="17" r="3"/></svg>
             <strong>Chưa chọn ảnh</strong><span>Chọn từ thư viện hoặc tải ảnh của bạn.</span>
           </div>
           <img id="preview-image" data-testid="preview-image" alt="Ảnh đã chọn" hidden>
+          <button type="button" id="zoom-preview" class="zoom-control"
+                  aria-label="Phóng to ảnh đã chọn" title="Phóng to ảnh" hidden>⤢</button>
         </div>
         <div class="image-caption"><span id="selected-title">Chưa có ảnh</span><span id="source-caption"></span></div>
         <button type="button" class="primary-button" id="predict" data-testid="predict-button" disabled><span id="button-spinner" class="spinner" hidden></span><span id="button-label">Phân loại ảnh</span></button>
@@ -84,16 +92,43 @@
         <div id="result" class="result" aria-live="polite" aria-atomic="true">
           <div id="result-empty" class="result-empty">Kết quả sẽ hiển thị ở đây.</div>
           <div id="result-content" data-testid="prediction-result" hidden>
-            <div class="result-top"><span class="overline">Dự đoán</span><span id="match-badge" class="match-badge" hidden></span></div>
-            <div class="prediction"><span id="prediction-code" class="posture-code"></span><strong id="prediction-label"></strong></div>
-            <div id="reference" class="reference" hidden></div>
-            <a id="image-credit" class="reference" hidden></a>
-            <div class="result-bottom"><span id="result-model"></span><span id="result-time"></span></div>
+            <h3 class="results-heading">Dự đoán</h3>
+            <div id="model-results" class="model-results"></div>
           </div>
         </div>
         <p id="prediction-error" class="error" role="alert" data-testid="error-message" hidden></p>
       </section>
     </main>
   </div>
+  <template id="model-result-template">
+    <details class="model-result">
+      <summary>
+        <strong class="result-model-name"></strong>
+        <span class="result-summary-prediction">
+          <span class="posture-code"></span><strong class="result-posture"></strong>
+          <span class="match-badge" hidden></span>
+        </span>
+      </summary>
+      <div class="model-result-details">
+        <p class="error model-result-error" hidden></p>
+        <div class="model-score-details">
+          <p class="score-heading">
+            <span class="score-kind"></span> <span aria-hidden="true">·</span> <strong class="score-model"></strong>
+          </p>
+          <ul class="class-scores" aria-label="Phần trăm theo tư thế">
+            {% for label in labels %}
+            <li class="score-row" data-class-id="{{ loop.index0 }}">
+              <span class="score-label">{{ label }}</span>
+              <span class="score-track" aria-hidden="true"><span class="score-fill"></span></span>
+              <span class="score-percent"></span>
+            </li>
+            {% endfor %}
+          </ul>
+          <p class="result-time"></p>
+        </div>
+      </div>
+    </details>
+  </template>
+  {% include '_image_viewer.html' %}
 </body>
 </html>

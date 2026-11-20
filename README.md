@@ -38,7 +38,7 @@ Dùng Python 3.12 và mở notebook bằng VS Code hoặc JupyterLab.
 python -m pip install -r requirements.txt
 ~~~
 
-Xem [hướng dẫn web](webdemo/README.md) để tải model. Hướng dẫn tải dữ liệu gốc nằm trong hai notebook chuẩn bị dữ liệu.
+Web demo có sẵn ảnh real và ảnh validation mẫu. Hướng dẫn cài model, tải dữ liệu gốc và thêm ảnh validation nằm trong [README của web demo](webdemo/README.md).
 
 ## Tài liệu tham khảo
 

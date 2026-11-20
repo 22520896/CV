@@ -6,6 +6,8 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+from PIL import ExifTags, Image
+
 
 PAPER = Path(__file__).resolve().parents[1] / "papercode"
 PREPARE = PAPER / "prepare-dataset"
@@ -23,6 +25,7 @@ class Sample:
     scenario: int = 0
     time_row: int = 0
     credit: dict | None = None
+    size: tuple[int, int] | None = None
 
 
 def frame_path(dataset, sample_id):
@@ -79,8 +82,15 @@ def load_catalog():
     real = {}
     for row in json.loads((REALDATA / "samples.json").read_text(encoding="utf-8")):
         sample_id = row["id"]
-        real[sample_id] = Sample(sample_id, REALDATA / "images" / f"{sample_id}.png",
-                                 row["label"], "real", credit=row)
+        path = REALDATA / "images" / f"{sample_id}.png"
+        try:
+            with Image.open(path) as image:
+                width, height = image.size
+                orientation = image.getexif().get(ExifTags.Base.Orientation)
+                size = (height, width) if orientation in (5, 6, 7, 8) else (width, height)
+        except OSError:
+            size = None
+        real[sample_id] = Sample(sample_id, path, row["label"], "real", credit=row, size=size)
     complete_moments = {}
     for scenario, timeline in moments.items():
         views = [tuple(sorted(items, key=lambda item: item.camera)) for items in timeline.values()
