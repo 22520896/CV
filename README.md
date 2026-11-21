@@ -17,7 +17,7 @@
 
 - Chia phân tầng 80:20. MCF giữ 8 ảnh cùng thời điểm trong cùng một tập và fold.
 - Notebook chuẩn bị dữ liệu mở được bằng ảnh và clip minh họa có sẵn. Bật chế độ dựng lại nếu bạn có file nguồn.
-- [Split MCF](papercode/prepare-dataset/splits/mcf.csv) · [Split UP-Fall](papercode/prepare-dataset/splits/upfall.csv)
+- [Notebook chia train, validation và CV](papercode/prepare-dataset/splits/create_splits.ipynb) · [Split MCF](papercode/prepare-dataset/splits/mcf.csv) · [Split UP-Fall](papercode/prepare-dataset/splits/upfall.csv)
 
 ## Huấn luyện
 
