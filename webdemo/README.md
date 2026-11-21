@@ -6,6 +6,8 @@
 - Trang **Dataset & camera** chạy cùng một model MCF trên 8 ảnh chụp cùng thời điểm. Bấm vào ảnh để mở kết quả chi tiết trong Demo.
 - Bộ model khớp benchmark báo cáo. P4 là **Ngồi** cho MCF, UP-Fall và Mix.
 
+`app.py` xử lý các route, `catalog.py` đọc danh sách ảnh, `features.py` trích đặc trưng và `models.py` nạp checkpoint, kiểm tra SHA-256 và tính điểm dự đoán.
+
 ## Ảnh thực tế
 
 - Mỗi tư thế P1–P4 có 7 ảnh chụp ngoài MCF và UP-Fall. Nhãn tham chiếu dựa trên tư thế nhìn thấy và các khung lân cận đối với P3 (Đang ngã).
