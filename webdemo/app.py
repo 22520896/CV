@@ -1,22 +1,19 @@
-import hashlib
 import io
-import json
-import os
 import secrets
 import time
 from collections import Counter, OrderedDict
 from functools import lru_cache
-from pathlib import Path, PureWindowsPath
+from pathlib import PureWindowsPath
 from threading import Lock
 
-import joblib
 import numpy as np
 from flask import Flask, abort, jsonify, render_template, request, send_file, url_for
 from PIL import Image, ImageOps, UnidentifiedImageError
 from threadpoolctl import threadpool_limits
 
-from webdemo.catalog import PAPER, load_catalog
+from webdemo.catalog import load_catalog
 from webdemo.features import hog_vector, resnet_vector, rgb128
+from webdemo.models import DATASETS, LABELS, PIPELINES, classify_with_scores, load_model, model_options
 
 
 app = Flask(__name__)
@@ -24,16 +21,6 @@ app.config["MAX_CONTENT_LENGTH"] = 8 * 1024 * 1024
 app.json.ensure_ascii = False
 app.jinja_env.globals["project_title"] = "Phân loại tư thế người từ dữ liệu hình ảnh trong các tình huống sinh hoạt và té ngã"
 Image.MAX_IMAGE_PIXELS = 20_000_000
-MODELS = PAPER / "eval/models"
-INDEX = json.loads((MODELS / "index.json").read_text(encoding="utf-8"))
-DATASETS = {"mcf": "MCF", "upfall": "UP-Fall", "mix": "MCF + UP-Fall"}
-LABELS = INDEX["labels"]
-FAMILIES = {"svm_rbf": "SVM-RBF", "linear_svc": "LinearSVC", "knn": "KNN", "softmax": "Softmax"}
-PIPELINES = {
-    feature + "_" + model: name + " + " + family
-    for feature, name in {"hog": "HOG", "resnet50": "ResNet-50"}.items()
-    for model, family in FAMILIES.items()
-}
 PAGE_SIZE = 9
 VALIDATION, REAL, SUMMARIES, MOMENTS = load_catalog()
 UPLOADS = OrderedDict()
@@ -52,26 +39,6 @@ def context(values):
     if camera not in (range(1, 9) if dataset == "mcf" else (1,)):
         raise ValueError("Camera không hợp lệ.")
     return dataset, camera
-
-
-def model_path(record):
-    return Path(os.environ.get("CV_MODEL_DIR", MODELS)) / record["path"]
-
-
-@lru_cache(maxsize=1)
-def load_model(dataset, pipeline):
-    record = INDEX["models"][dataset][pipeline]
-    path = model_path(record)
-    if not path.is_file():
-        package = INDEX["archives"][dataset]["filename"]
-        raise ValueError(f"Tải {package} và giải nén vào papercode/eval/models để chạy mô hình.")
-    with path.open("rb") as handle:
-        if hashlib.file_digest(handle, "sha256").hexdigest() != record["sha256"]:
-            raise ValueError("Checkpoint không khớp index.json.")
-    bundle = joblib.load(path)
-    if bundle["protocol"] != record["protocol"] or bundle["feature_scaler"] is not None:
-        raise ValueError("Checkpoint dùng giao thức khác.")
-    return bundle["model"]
 
 
 @lru_cache(maxsize=64)
@@ -254,11 +221,6 @@ def predict_camera_views():
     return jsonify(results=results)
 
 
-def model_options(dataset):
-    return [{"id": model_id, "name": name, "available": model_path(INDEX["models"][dataset][model_id]).is_file()}
-            for model_id, name in PIPELINES.items()]
-
-
 @app.get("/api/config")
 def configuration():
     dataset, camera = context(request.args)
@@ -341,27 +303,6 @@ def upload():
             UPLOADS.popitem(last=False)
     return jsonify(id=identifier, source="upload", title=PureWindowsPath(file.filename).name[:100],
                    reference=None, image_url=url_for("media", source="upload", identifier=identifier))
-
-
-def classify_with_scores(classifier, features, pipeline):
-    if hasattr(classifier, "predict_proba"):
-        values = classifier.predict_proba(features)[0]
-        kind = "neighbor_votes" if pipeline.endswith("_knn") else "probability"
-    else:
-        margins = classifier.decision_function(features)[0]
-        if pipeline.endswith("_svm_rbf") and classifier.decision_function_shape == "ovr":
-            # scikit-learn 1.7 returns the pairwise vote count plus a tie-break term in (-1/3, 1/3).
-            votes = np.rint(margins).astype(int)
-            values = votes / votes.sum()
-            kind = "pairwise_votes"
-        else:
-            weights = np.exp(margins - margins.max())
-            values = weights / weights.sum()
-            kind = "relative_score"
-    # Distance-weighted KNN predicts the class with the highest vote share.
-    prediction = classifier.classes_[values.argmax()] if kind == "neighbor_votes" else classifier.predict(features)[0]
-    scores = {int(label): float(value) for label, value in zip(classifier.classes_, values)}
-    return int(prediction), {"kind": kind, "by_class": scores}
 
 
 @app.post("/api/predict")
