@@ -36,7 +36,7 @@ Bộ validation đầy đủ theo split có **5.408 ảnh MCF** và **8.849 ản
 
 | Dataset | File nguồn và thư mục đặt file | Ảnh RGB128 sau khi chạy notebook |
 |---|---|---|
-| MCF | Tải gói Kaggle và giải nén video vào `papercode/prepare-dataset/dataraw/mcf/` theo dạng `chute01/cam1.avi`. Đổi tên `technicalReport.pdf` trong gói thành `technical_report_2010.pdf` rồi đặt vào cùng thư mục `mcf/`. [Gói MCF trên Kaggle](https://www.kaggle.com/datasets/soumicksarker/multiple-cameras-fall-dataset) | `papercode/prepare-dataset/prepared/mcf/images/<sample_id>.png` |
+| MCF | Tải gói Kaggle và giải nén video vào `papercode/prepare-dataset/dataraw/mcf/` theo dạng `chute01/cam1.avi`. Hai bảng chú giải CSV đã có sẵn trong repo. [Gói MCF trên Kaggle](https://www.kaggle.com/datasets/soumicksarker/multiple-cameras-fall-dataset) | `papercode/prepare-dataset/prepared/mcf/images/<sample_id>.png` |
 | UP-Fall | Trong mục **Downloads** của HAR-UP, chọn Subject, Activity, Trial và tải **Camera1**. Tải `CompleteDataSet.csv` từ **Complete Downloads**. Đặt CSV và các ZIP theo mẫu `S01_A01_T1_Camera1.zip` trong `papercode/prepare-dataset/dataraw/upfall/`. [Trang tải HAR-UP](https://sites.google.com/up.edu.mx/har-up/) | `papercode/prepare-dataset/prepared/upfall/images/<sample_id>.png` |
 
 Mở notebook của dataset tương ứng, đặt `PREPARE_RAW = True` rồi chạy từ đầu. Notebook ghi ảnh theo `sample_id` và kiểm tra với split công bố. Khi ảnh nằm trong `prepared/`, web tự tìm thấy lúc khởi động. [Notebook MCF](../papercode/prepare-dataset/prepare_mcf.ipynb) · [Notebook UP-Fall](../papercode/prepare-dataset/prepare_upfall.ipynb)

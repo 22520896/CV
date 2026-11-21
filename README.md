@@ -42,6 +42,6 @@ Web demo có sẵn ảnh real và ảnh validation mẫu. Hướng dẫn cài mo
 
 ## Tài liệu tham khảo
 
-- Auvinet và cộng sự. [Multiple Cameras Fall Dataset](https://www-labs.iro.umontreal.ca/~labimage/Dataset/technicalReport.pdf), 2010. [Bản phân phối Kaggle](https://www.kaggle.com/datasets/soumicksarker/multiple-cameras-fall-dataset)
+- Auvinet và cộng sự. *Multiple Cameras Fall Dataset*, 2010. [Bản phân phối Kaggle](https://www.kaggle.com/datasets/soumicksarker/multiple-cameras-fall-dataset)
 - Martínez-Villaseñor và cộng sự. [UP-Fall Detection Dataset](https://doi.org/10.3390/s19091988), 2019. [Trang dataset](https://sites.google.com/up.edu.mx/har-up/)
 - Kareem và cộng sự. [Exploiting the features of deep residual network with SVM classifier for human posture recognition](https://doi.org/10.1371/journal.pone.0314959), 2024.
